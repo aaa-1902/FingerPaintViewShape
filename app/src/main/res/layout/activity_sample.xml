@@ -164,18 +164,40 @@
                     android:progress="20" />
             </LinearLayout>
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="4dp">
+
+                <TextView
+                    android:layout_width="70dp"
+                    android:layout_height="wrap_content"
+                    android:text="Fill"
+                    android:textColor="#FFFFFF" />
+
+                <CheckBox
+                    android:id="@+id/fill"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="80"
+                    android:progress="20" />
+            </LinearLayout>
+
+
+
         </LinearLayout>
 
         <LinearLayout
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
             android:layout_weight="1"
             android:orientation="vertical">
 
             <TextView
                 android:id="@+id/colorPreview"
                 android:layout_width="match_parent"
-                android:layout_height="0dp"
+                android:layout_height="50dp"
                 android:layout_weight="1"
                 android:gravity="center"
                 android:textColor="#FFFFFF"
@@ -195,17 +217,38 @@
                     android:textSize="11dp"/>
 
                 <RadioButton
-                    android:id="@+id/emboss"
+                    android:id="@+id/eraser"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Emboss"
+                    android:text="Eraser"
+                    android:textSize="11dp"/>
+
+<!--                <RadioButton-->
+<!--                    android:id="@+id/emboss"-->
+<!--                    android:layout_width="wrap_content"-->
+<!--                    android:layout_height="wrap_content"-->
+<!--                    android:text="Emboss"-->
+<!--                    android:textSize="11dp"/>-->
+
+<!--                <RadioButton-->
+<!--                    android:id="@+id/blur"-->
+<!--                    android:layout_width="wrap_content"-->
+<!--                    android:layout_height="wrap_content"-->
+<!--                    android:text="Blur"-->
+<!--                    android:textSize="11dp"/>-->
+
+                <RadioButton
+                    android:id="@+id/square"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Square"
                     android:textSize="11dp"/>
 
                 <RadioButton
-                    android:id="@+id/blur"
+                    android:id="@+id/circle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Blur"
+                    android:text="Circle"
                     android:textSize="11dp"/>
 
             </RadioGroup>

@@ -24,8 +24,14 @@ class SampleActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
         tolerance.setOnSeekBarChangeListener(this)
         width.setOnSeekBarChangeListener(this)
         normal.setOnClickListener(this)
-        emboss.setOnClickListener(this)
-        blur.setOnClickListener(this)
+        eraser.setOnClickListener(this)
+//        emboss.setOnClickListener(this)
+//        blur.setOnClickListener(this)
+        square.setOnClickListener(this)
+        circle.setOnClickListener(this)
+        fill.setOnCheckedChangeListener { _, isChecked ->
+            finger.toggleFill(isChecked)
+        }
     }
 
     override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -49,9 +55,12 @@ class SampleActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
             clear -> finger.clear()
             close -> hidePreview()
             save -> showPreview()
-            emboss -> finger.emboss()
-            blur -> finger.blur()
+//            emboss -> finger.emboss()
+//            blur -> finger.blur()
             normal -> finger.normal()
+            square -> finger.square()
+            circle -> finger.circle()
+            eraser -> finger.eraser()
         }
     }
 

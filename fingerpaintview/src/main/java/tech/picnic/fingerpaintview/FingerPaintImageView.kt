@@ -7,8 +7,10 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import androidx.appcompat.widget.AppCompatImageView
 import android.util.AttributeSet
+import android.util.Log
 import android.view.MotionEvent
 import nl.picnic.fingerpaintview.R
+import kotlin.math.sqrt
 
 class FingerPaintImageView @JvmOverloads constructor(context: Context,
                                                      attrs: AttributeSet? = null,
@@ -17,9 +19,14 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
         AppCompatImageView(context, attrs, defStyleAttr) {
 
     private enum class BrushType {
-        BLUR, EMBOSS, NORMAL
+        BLUR, EMBOSS, NORMAL, ERASER, SHAPE_CIRCLE, SHAPE_SQUARE
     }
 
+    private enum class PaintStyle {
+        STROKE, FILL
+    }
+
+    private val TAG = "FingerPaintImageView"
     private val defaultStrokeColor = Color.WHITE
     private val defaultStrokeWidth = 12f
     private val defaultTouchTolerance = 4f
@@ -28,8 +35,10 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
     private var brushCanvas: Canvas? = null
     private var countDrawn = 0
     private var currentBrush = BrushType.NORMAL
+    private var currentPaintStyle = PaintStyle.STROKE
 
     var inEditMode = false
+    var isInEraserMode = false
 
     private val defaultEmboss: EmbossMaskFilter by lazy {
         EmbossMaskFilter(floatArrayOf(1F, 1F, 1F), 0.4F, 6F, 3.5F)
@@ -59,15 +68,28 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
         it.isAntiAlias = true
         it.isDither = true
         it.color = strokeColor
-        it.style = Paint.Style.STROKE
+        if(currentPaintStyle == PaintStyle.STROKE)
+            it.style = Paint.Style.STROKE
+        else
+            it.style = Paint.Style.FILL
         it.strokeJoin = Paint.Join.ROUND
         it.strokeCap = Paint.Cap.ROUND
         it.strokeWidth = strokeWidth
+
+        when(currentBrush){
+            BrushType.ERASER -> it.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+            else -> it.xfermode = null
+        }
     }
 
+    
+
+    private var startingX = 0f;
+    private var startingY = 0f;
     private var currentX = 0f
     private var currentY = 0f
     private var paths: MutableList<Pair<Path, Paint>> = mutableListOf()
+    private var previewPaths: MutableList<Pair<Path, Paint>> = mutableListOf()
 
     init {
         if (attrs != null) {
@@ -124,6 +146,11 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
     }
 
     private fun getCurrentPath() = paths.lastOrNull()?.first
+    private fun getPreviewPath() : Path {
+        previewPaths = mutableListOf()
+        previewPaths.add(Path().also { it.moveTo(startingX + 1, startingY + 1) } to Paint(pathPaint))
+        return previewPaths.last().first
+    }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent?): Boolean {
@@ -162,9 +189,16 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
 
         // make sure drawings are kept within the image bounds
         if (imageBounds.contains(event.x, event.y)) {
-            paths.add(Path().also { it.moveTo(event.x + 1, event.y + 1) } to Paint(pathPaint))
+            when (currentBrush){
+                BrushType.NORMAL, BrushType.EMBOSS, BrushType.BLUR, BrushType.ERASER -> {
+                    paths.add(Path().also { it.moveTo(event.x + 1, event.y + 1) } to Paint(pathPaint))
+                }
+            }
             currentX = event.x
             currentY = event.y
+            startingX = event.x
+            startingY = event.y
+
         }
     }
 
@@ -182,19 +216,50 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
         val dy = Math.abs(yPos - currentY)
 
         if (dx >= touchTolerance || dy >= touchTolerance) {
-            getCurrentPath()?.quadTo(currentX, currentY, (xPos + currentX) / 2, (yPos + currentY) / 2)
+
+            when (currentBrush){
+                BrushType.SHAPE_CIRCLE -> {
+                    val radius = sqrt(Math.pow((currentX - startingX).toDouble(), 2.0))
+                    getPreviewPath().addCircle(startingX, startingY, radius.toFloat() / 2, Path.Direction.CW)
+                }
+                BrushType.SHAPE_SQUARE -> {
+                    getPreviewPath()?.addRect(startingX, startingY, currentX, currentY, Path.Direction.CW)
+                }
+                BrushType.NORMAL, BrushType.EMBOSS, BrushType.BLUR -> getCurrentPath()?.quadTo(currentX, currentY, (xPos + currentX) / 2, (yPos + currentY) / 2)
+                BrushType.ERASER -> getCurrentPath()?.quadTo(currentX, currentY, (xPos + currentX) / 2, (yPos + currentY) / 2).also { pathPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR) }
+                else -> null
+            }
+
+
             currentX = xPos
             currentY = yPos
         }
     }
 
-    private fun handleTouchEnd() = getCurrentPath()?.lineTo(currentX, currentY)
+    private fun handleTouchEnd() {
+        when (currentBrush) {
+            BrushType.SHAPE_CIRCLE -> {
+                val radius = sqrt(Math.pow((currentX - startingX).toDouble(), 2.0))
+                getCurrentPath()?.addCircle(startingX, startingY, radius.toFloat() / 2, Path.Direction.CW)
+                previewPaths.clear()
+            }
+            BrushType.SHAPE_SQUARE -> {
+                getCurrentPath()?.addRect(startingX, startingY, currentX, currentY, Path.Direction.CW)
+                previewPaths.clear()
+            }
+            BrushType.NORMAL, BrushType.EMBOSS, BrushType.BLUR -> getCurrentPath()?.lineTo(currentX, currentY)
+            else -> null
+        }
+
+    }
 
     override fun onDraw(canvas: Canvas?) {
         super.onDraw(canvas)
         brushBitmap?.eraseColor(Color.TRANSPARENT)
         brushCanvas?.drawColor(Color.TRANSPARENT)
         canvas?.save()
+        Log.d(TAG, "currentBrush: $currentBrush")
+        Log.d("paths", "paths: ${paths.size}")
         for (index in paths.indices) {
             val path = paths[index]
             if (index >= countDrawn) {
@@ -203,25 +268,45 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
                             BrushType.EMBOSS -> defaultEmboss
                             BrushType.BLUR -> defaultBlur
                             BrushType.NORMAL -> null
+                            BrushType.SHAPE_CIRCLE -> null
+                            BrushType.SHAPE_SQUARE -> null
+                            else -> {
+                                null}
                         }
             }
             brushCanvas?.drawPath(paths[index].first, paths[index].second)
         }
+        Log.d("previewPaths", "previewPaths: ${previewPaths.size}")
+        for (index in previewPaths.indices) {
+            Log.d("previewPaths", "previewPaths: $index")
+            brushCanvas?.drawPath(previewPaths[index].first, previewPaths[index].second)
+        }
         canvas?.drawBitmap(brushBitmap, 0f, 0f, defaultBitmapPaint)
         canvas?.restore()
+    }
+
+    private fun disableEraser() {
+        isInEraserMode = false
     }
 
     /**
      * Enable normal mode
      */
     fun normal() {
+        disableEraser()
         currentBrush = BrushType.NORMAL
+    }
+
+    fun eraser() {
+        isInEraserMode = true
+        currentBrush = BrushType.ERASER
     }
 
     /**
      * Change brush type to emboss
      */
     fun emboss() {
+        disableEraser()
         currentBrush = BrushType.EMBOSS
     }
 
@@ -229,7 +314,18 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
      * Change brush type to blur
      */
     fun blur() {
+        disableEraser()
         currentBrush = BrushType.BLUR
+    }
+
+    fun square() {
+        disableEraser()
+        currentBrush = BrushType.SHAPE_SQUARE
+    }
+
+    fun circle() {
+        disableEraser()
+        currentBrush = BrushType.SHAPE_CIRCLE
     }
 
     /**
@@ -239,6 +335,14 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
         paths.takeIf { it.isNotEmpty() }?.removeAt(paths.lastIndex)
         countDrawn--
         invalidate()
+    }
+
+    fun toggleFill(toggle: Boolean) {
+        if(toggle) {
+            pathPaint.style = Paint.Style.FILL
+        } else {
+            pathPaint.style = Paint.Style.STROKE
+        }
     }
 
     /**
@@ -260,4 +364,6 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
         countDrawn = 0
         invalidate()
     }
+
+
 }
