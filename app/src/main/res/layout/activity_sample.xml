@@ -5,15 +5,24 @@
     android:layout_height="match_parent"
     android:background="#68768A">
 
-    <tech.picnic.fingerpaintview.FingerPaintImageView
+    <FrameLayout
         android:id="@+id/finger"
-        android:layout_width="300dp"
-        android:layout_height="300dp"
         android:layout_alignParentTop="true"
         android:layout_centerHorizontal="true"
         android:layout_marginTop="8dp"
-        android:src="@drawable/ic_launcher_background"
-        app:inEditMode="true" />
+        android:layout_width="300dp"
+        android:layout_height="300dp">
+
+        <tech.picnic.fingerpaintview.FingerPaintImageView
+            android:id="@+id/fingerPaint"
+            android:layout_width="300dp"
+            android:layout_height="300dp"
+
+            android:src="@drawable/bg_canvas"
+            app:inEditMode="true" />
+
+    </FrameLayout>
+
 
     <TextView
         android:id="@+id/undo"
@@ -249,6 +258,13 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Circle"
+                    android:textSize="11dp"/>
+
+                <RadioButton
+                    android:id="@+id/text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Text"
                     android:textSize="11dp"/>
 
             </RadioGroup>

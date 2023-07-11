@@ -5,12 +5,14 @@ import android.content.Context
 import android.graphics.*
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
-import androidx.appcompat.widget.AppCompatImageView
 import android.util.AttributeSet
-import android.util.Log
 import android.view.MotionEvent
+import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.widget.EditText
+import android.widget.FrameLayout
+import androidx.appcompat.widget.AppCompatImageView
 import nl.picnic.fingerpaintview.R
-import kotlin.math.sqrt
 
 class FingerPaintImageView @JvmOverloads constructor(context: Context,
                                                      attrs: AttributeSet? = null,
@@ -19,7 +21,7 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
         AppCompatImageView(context, attrs, defStyleAttr) {
 
     private enum class BrushType {
-        BLUR, EMBOSS, NORMAL, ERASER, SHAPE_CIRCLE, SHAPE_SQUARE
+        BLUR, EMBOSS, NORMAL, ERASER, TEXT, SHAPE_CIRCLE, SHAPE_SQUARE
     }
 
     private enum class PaintStyle {
@@ -27,7 +29,7 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
     }
 
     private val TAG = "FingerPaintImageView"
-    private val defaultStrokeColor = Color.WHITE
+    private val defaultStrokeColor = Color.BLACK
     private val defaultStrokeWidth = 12f
     private val defaultTouchTolerance = 4f
     private val defaultBitmapPaint = Paint(Paint.DITHER_FLAG)
@@ -36,9 +38,9 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
     private var countDrawn = 0
     private var currentBrush = BrushType.NORMAL
     private var currentPaintStyle = PaintStyle.STROKE
+    private var frameLayout: FrameLayout? = null
 
     var inEditMode = false
-    var isInEraserMode = false
 
     private val defaultEmboss: EmbossMaskFilter by lazy {
         EmbossMaskFilter(floatArrayOf(1F, 1F, 1F), 0.4F, 6F, 3.5F)
@@ -47,42 +49,49 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
         BlurMaskFilter(5F, BlurMaskFilter.Blur.NORMAL)
     }
 
+    fun setFrameLayout(frameLayout: FrameLayout) {
+        this.frameLayout = frameLayout
+    }
+
     var strokeColor = defaultStrokeColor
-        set(value) {
-            field = value
-            pathPaint.color = value
-        }
 
     var strokeWidth = defaultStrokeWidth
-        set(value) {
-            field = value
-            pathPaint.strokeWidth = value
-        }
 
     private val matrixValues = FloatArray(9)
         get() = field.apply { imageMatrix.getValues(this) }
 
     var touchTolerance = defaultTouchTolerance
 
-    private val pathPaint = Paint().also {
-        it.isAntiAlias = true
-        it.isDither = true
-        it.color = strokeColor
-        if(currentPaintStyle == PaintStyle.STROKE)
-            it.style = Paint.Style.STROKE
-        else
-            it.style = Paint.Style.FILL
-        it.strokeJoin = Paint.Join.ROUND
-        it.strokeCap = Paint.Cap.ROUND
-        it.strokeWidth = strokeWidth
 
-        when(currentBrush){
-            BrushType.ERASER -> it.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
-            else -> it.xfermode = null
+
+    private fun getCurrentPaint() : Paint {
+        return Paint().also {
+            it.isAntiAlias = true
+            it.isDither = true
+            it.color = strokeColor
+            it.style = if (currentPaintStyle === PaintStyle.STROKE) Paint.Style.STROKE else Paint.Style.FILL
+            it.xfermode = if (currentBrush === BrushType.ERASER) PorterDuffXfermode(PorterDuff.Mode.CLEAR) else null
+            it.strokeJoin = Paint.Join.ROUND
+            it.strokeCap = Paint.Cap.ROUND
+            it.strokeWidth = strokeWidth
         }
     }
 
-    
+    private fun getTextPreviewPaint() : Paint{
+        return Paint().also {
+            it.isAntiAlias = true
+            it.isDither = true
+            it.color = strokeColor
+            it.style = Paint.Style.STROKE
+            it.strokeJoin = Paint.Join.BEVEL
+            it.strokeCap = Paint.Cap.SQUARE
+            val intervals = floatArrayOf(10f,20f)
+            it.pathEffect = DashPathEffect(intervals, 0f)
+            it.strokeWidth = 4f
+        }
+    }
+
+
 
     private var startingX = 0f;
     private var startingY = 0f;
@@ -148,7 +157,13 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
     private fun getCurrentPath() = paths.lastOrNull()?.first
     private fun getPreviewPath() : Path {
         previewPaths = mutableListOf()
-        previewPaths.add(Path().also { it.moveTo(startingX + 1, startingY + 1) } to Paint(pathPaint))
+
+        if(currentBrush == BrushType.TEXT){
+            previewPaths.add(Path().also { it.moveTo(startingX + 1, startingY + 1) } to Paint(getTextPreviewPaint()))
+            return previewPaths.last().first
+        }
+
+        previewPaths.add(Path().also { it.moveTo(startingX + 1, startingY + 1) } to Paint(getCurrentPaint()))
         return previewPaths.last().first
     }
 
@@ -175,6 +190,7 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
     }
 
     private fun handleTouchStart(event: MotionEvent) {
+
         val sourceBitmap = super.getDrawable() ?: return
 
         val xTranslation = matrixValues[Matrix.MTRANS_X]
@@ -189,11 +205,7 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
 
         // make sure drawings are kept within the image bounds
         if (imageBounds.contains(event.x, event.y)) {
-            when (currentBrush){
-                BrushType.NORMAL, BrushType.EMBOSS, BrushType.BLUR, BrushType.ERASER -> {
-                    paths.add(Path().also { it.moveTo(event.x + 1, event.y + 1) } to Paint(pathPaint))
-                }
-            }
+            paths.add(Path().also { it.moveTo(event.x + 1, event.y + 1) } to Paint(getCurrentPaint()))
             currentX = event.x
             currentY = event.y
             startingX = event.x
@@ -218,15 +230,16 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
         if (dx >= touchTolerance || dy >= touchTolerance) {
 
             when (currentBrush){
+                BrushType.TEXT -> {
+                    getPreviewPath().addRect(startingX, startingY, currentX, currentY, Path.Direction.CW)
+                }
                 BrushType.SHAPE_CIRCLE -> {
-                    val radius = sqrt(Math.pow((currentX - startingX).toDouble(), 2.0))
-                    getPreviewPath().addCircle(startingX, startingY, radius.toFloat() / 2, Path.Direction.CW)
+                    getPreviewPath().addOval(startingX, startingY, currentX, currentY, Path.Direction.CW)
                 }
                 BrushType.SHAPE_SQUARE -> {
-                    getPreviewPath()?.addRect(startingX, startingY, currentX, currentY, Path.Direction.CW)
+                    getPreviewPath().addRect(startingX, startingY, currentX, currentY, Path.Direction.CW)
                 }
-                BrushType.NORMAL, BrushType.EMBOSS, BrushType.BLUR -> getCurrentPath()?.quadTo(currentX, currentY, (xPos + currentX) / 2, (yPos + currentY) / 2)
-                BrushType.ERASER -> getCurrentPath()?.quadTo(currentX, currentY, (xPos + currentX) / 2, (yPos + currentY) / 2).also { pathPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR) }
+                BrushType.NORMAL, BrushType.EMBOSS, BrushType.BLUR, BrushType.ERASER -> getCurrentPath()?.quadTo(currentX, currentY, (xPos + currentX) / 2, (yPos + currentY) / 2)
                 else -> null
             }
 
@@ -238,9 +251,15 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
 
     private fun handleTouchEnd() {
         when (currentBrush) {
+            BrushType.TEXT -> {
+                if(frameLayout == null) {
+                    throw Exception("FrameLayout is null")
+                }
+                createEditText()
+                previewPaths.clear()
+            }
             BrushType.SHAPE_CIRCLE -> {
-                val radius = sqrt(Math.pow((currentX - startingX).toDouble(), 2.0))
-                getCurrentPath()?.addCircle(startingX, startingY, radius.toFloat() / 2, Path.Direction.CW)
+                getCurrentPath()?.addOval(startingX, startingY, currentX, currentY, Path.Direction.CW)
                 previewPaths.clear()
             }
             BrushType.SHAPE_SQUARE -> {
@@ -253,13 +272,53 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
 
     }
 
+    //Create a function to create the EditText using the startingX, startingY, currentX, currentY as the bounds
+    private fun createEditText() {
+        var editText = EditText(context)
+        var width = currentX.toInt() - startingX.toInt()// startingX.toInt() - currentX.toInt()
+        var height = currentY.toInt() - startingY.toInt()// startingY.toInt() - currentY.toInt()
+        //get density of screen
+        var scale = resources.displayMetrics.density
+        var widthScaled = (width / scale).toInt()
+        var heightScaled = (height / scale).toInt()
+        editText.x = startingX
+        editText.y = startingY
+        editText.layoutParams = ViewGroup.LayoutParams(width, height)
+        //path as background
+        var path = previewPaths.last().first
+        var paint = previewPaths.last().second
+        var bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        var canvas = Canvas(bitmap)
+        canvas.drawPath(path, paint)
+        var drawable = BitmapDrawable(resources, bitmap)
+        editText.background = drawable
+        frameLayout?.addView(editText)
+        editText.onFocusChangeListener = OnFocusChangeListener { v, hasFocus ->
+            if (!hasFocus) {
+                var bitmap = v.getBitmapFromView()
+                brushCanvas?.drawBitmap(bitmap, v.x, v.y, null)
+                frameLayout?.removeView(v)
+            }
+        }
+    }
+
+//    private fun createEditText() {
+//        var editText = EditText(context)
+//        var width = currentX.toInt() - startingX.toInt()// startingX.toInt() - currentX.toInt()
+//        var height = currentY.toInt() - startingY.toInt()// startingY.toInt() - currentY.toInt()
+//        editText.width = currentX.toInt()
+//        editText.height = currentY.toInt()
+//        editText.x = startingX
+//        editText.y = startingY
+//        editText.setBackgroundColor(Color.RED)
+//        frameLayout?.addView(editText)
+//    }
+
     override fun onDraw(canvas: Canvas?) {
         super.onDraw(canvas)
         brushBitmap?.eraseColor(Color.TRANSPARENT)
         brushCanvas?.drawColor(Color.TRANSPARENT)
         canvas?.save()
-        Log.d(TAG, "currentBrush: $currentBrush")
-        Log.d("paths", "paths: ${paths.size}")
         for (index in paths.indices) {
             val path = paths[index]
             if (index >= countDrawn) {
@@ -267,38 +326,27 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
                         when (currentBrush) {
                             BrushType.EMBOSS -> defaultEmboss
                             BrushType.BLUR -> defaultBlur
-                            BrushType.NORMAL -> null
-                            BrushType.SHAPE_CIRCLE -> null
-                            BrushType.SHAPE_SQUARE -> null
-                            else -> {
-                                null}
+                            else -> null
                         }
             }
             brushCanvas?.drawPath(paths[index].first, paths[index].second)
         }
-        Log.d("previewPaths", "previewPaths: ${previewPaths.size}")
         for (index in previewPaths.indices) {
-            Log.d("previewPaths", "previewPaths: $index")
             brushCanvas?.drawPath(previewPaths[index].first, previewPaths[index].second)
         }
         canvas?.drawBitmap(brushBitmap, 0f, 0f, defaultBitmapPaint)
         canvas?.restore()
     }
 
-    private fun disableEraser() {
-        isInEraserMode = false
-    }
 
     /**
      * Enable normal mode
      */
     fun normal() {
-        disableEraser()
         currentBrush = BrushType.NORMAL
     }
 
     fun eraser() {
-        isInEraserMode = true
         currentBrush = BrushType.ERASER
     }
 
@@ -306,7 +354,6 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
      * Change brush type to emboss
      */
     fun emboss() {
-        disableEraser()
         currentBrush = BrushType.EMBOSS
     }
 
@@ -314,18 +361,19 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
      * Change brush type to blur
      */
     fun blur() {
-        disableEraser()
         currentBrush = BrushType.BLUR
     }
 
     fun square() {
-        disableEraser()
         currentBrush = BrushType.SHAPE_SQUARE
     }
 
     fun circle() {
-        disableEraser()
         currentBrush = BrushType.SHAPE_CIRCLE
+    }
+
+    fun text() {
+        currentBrush = BrushType.TEXT
     }
 
     /**
@@ -338,10 +386,10 @@ class FingerPaintImageView @JvmOverloads constructor(context: Context,
     }
 
     fun toggleFill(toggle: Boolean) {
-        if(toggle) {
-            pathPaint.style = Paint.Style.FILL
+        currentPaintStyle = if (toggle) {
+            PaintStyle.FILL
         } else {
-            pathPaint.style = Paint.Style.STROKE
+            PaintStyle.STROKE
         }
     }
 

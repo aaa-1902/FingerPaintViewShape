@@ -13,7 +13,7 @@ class SampleActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_sample)
-
+        fingerPaint.setFrameLayout(finger)
         close.setOnClickListener(this)
         save.setOnClickListener(this)
         undo.setOnClickListener(this)
@@ -30,8 +30,9 @@ class SampleActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
         square.setOnClickListener(this)
         circle.setOnClickListener(this)
         fill.setOnCheckedChangeListener { _, isChecked ->
-            finger.toggleFill(isChecked)
+            fingerPaint.toggleFill(isChecked)
         }
+        text.setOnClickListener(this)
     }
 
     override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -40,33 +41,34 @@ class SampleActivity : AppCompatActivity(), SeekBar.OnSeekBarChangeListener, Vie
             val g = green.progress
             val b = blue.progress
             val color = Color.argb(255, r, g, b)
-            finger.strokeColor = color
+            fingerPaint.strokeColor = color
             colorPreview.setBackgroundColor(color)
         } else if (seekBar?.id == tolerance.id) {
-            finger.touchTolerance = progress.toFloat()
+            fingerPaint.touchTolerance = progress.toFloat()
         } else if (seekBar?.id == width.id) {
-            finger.strokeWidth = progress.toFloat()
+            fingerPaint.strokeWidth = progress.toFloat()
         }
     }
 
     override fun onClick(v: View?) {
         when (v) {
-            undo -> finger.undo()
-            clear -> finger.clear()
+            undo -> fingerPaint.undo()
+            clear -> fingerPaint.clear()
             close -> hidePreview()
             save -> showPreview()
 //            emboss -> finger.emboss()
 //            blur -> finger.blur()
-            normal -> finger.normal()
-            square -> finger.square()
-            circle -> finger.circle()
-            eraser -> finger.eraser()
+            normal -> fingerPaint.normal()
+            square -> fingerPaint.square()
+            circle -> fingerPaint.circle()
+            eraser -> fingerPaint.eraser()
+            text -> fingerPaint.text()
         }
     }
 
     private fun showPreview() {
         previewContainer.visibility = View.VISIBLE
-        preview.setImageDrawable(finger.drawable)
+        preview.setImageDrawable(fingerPaint.drawable)
     }
 
     private fun hidePreview() {
